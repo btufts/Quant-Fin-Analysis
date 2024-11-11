@@ -210,19 +210,19 @@ class RandomStrategy(StrategyBase):
         return True
     
     def long_condition(self):
-        if self.action:
+        if self.action==2:
             return True
         else:
             return False
     
     def close_condition(self):
-        if self.action:
+        if self.action==1:
             return True
         else:
             return False
         
     def next(self):
-        self.action = random.randint(0,2) # Get random value 0: hold, 1: change position
+        self.action = random.randint(0,3) # Get random value 0: hold, 1: change position
         if self.order:
             return  # Skip if there's a pending order
     
@@ -230,12 +230,104 @@ class RandomStrategy(StrategyBase):
             if self.long_condition():
                 if not self.position:  # Not in the market
                     self.buy(exectype=bt.Order.Market)
-                else:
-                    self.close()
+        if self.close_condition():
+            self.close()
 
     def next_open(self):
         if self.long_condition():
             if not self.position:  # Not in the market
                 self.buy(exectype=bt.Order.Market)
-            else:
-                self.close()
+
+class CCIStrategy(bt.Strategy):
+    params = (
+        ('period', 20),  # CCI period for calculation
+        ('upperband', 100),   # Overbought threshold
+        ('lowerband', -100),   # Oversold threshold
+    )
+
+    def __init__(self):
+        # Initialize the CCI indicator
+        self.cheating = self.cerebro.p.cheat_on_open
+        self.equity_curve = []
+        self.cci = bt.indicators.CommodityChannelIndex(period=self.params.period)
+
+    @staticmethod
+    def get_optimization_args(**kwargs) -> tuple[dict[str, list], dict[str, int]]:
+        opt_args = {}
+        if "min_period" in kwargs or "max_period" in kwargs:
+            if "max_period" not in kwargs:
+                exit("max_period must be specified if min_period is specified")
+            if "min_period" not in kwargs:
+                exit("min_period must be specified if max_period is specified")
+            opt_args['period']=list(range(
+                int(kwargs['min_period']),
+                int(kwargs['max_period']),
+                int(kwargs['period_step']) if 'period_step' in kwargs else 1
+            ))
+        elif "period" in kwargs:
+            opt_args['period']=[kwargs['period']]
+        
+        if "min_lowerband" in kwargs or "max_lowerband" in kwargs:
+            if "max_lowerband" not in kwargs:
+                exit("max_lowerband must be specified if min_lowerband is specified")
+            if "min_lowerband" not in kwargs:
+                exit("min_lowerband must be specified if max_lowerband is specified")
+            opt_args['lowerband']=list(range(
+                int(kwargs['min_lowerband']),
+                int(kwargs['max_lowerband']),
+                int(kwargs['lowerband_step']) if 'lowerband_step' in kwargs else -5
+            ))
+        elif "lowerband" in kwargs:
+            opt_args['lowerband']=[kwargs['lowerband']]
+        
+        if "min_upperband" in kwargs or "max_upperband" in kwargs:
+            if "max_upperband" not in kwargs:
+                exit("max_upperband must be specified if min_upperband is specified")
+            if "min_upperband" not in kwargs:
+                exit("min_upperband must be specified if max_upperband is specified")
+            opt_args['upperband']=list(range(
+                int(kwargs['min_upperband']),
+                int(kwargs['max_upperband']),
+                int(kwargs['upperband_step']) if 'upperband_step' in kwargs else -5
+            ))
+        elif "upperband" in kwargs:
+            opt_args['upperband']=[kwargs['upperband']]
+
+        steps = {
+            'period': int(kwargs['period_step']) if 'period_step' in kwargs else 1,
+            'lowerband': int(kwargs['lowerband_step']) if 'lowerband_step' in kwargs else -5,
+            'upperband': int(kwargs['upperband_step']) if 'upperband_step' in kwargs else -5
+        }
+
+        return opt_args, steps
+    
+    def long_condition(self):
+        if self.cci[0] > self.params.lowerband:
+            return True
+        else:
+            return False
+        
+    def close_condition(self):
+        if self.cci[0] < self.params.upperband:
+            return True
+        else:
+            return False
+
+    def next(self):
+        self.equity_curve.append(self.broker.getvalue())
+        # Check if we are in the market
+        if not self.cheating:
+            if not self.position and self.long_condition():
+                # Buy signal: CCI crosses above the oversold threshold
+                self.buy(exectype=bt.Order.Market)
+        if self.position and self.close_condition():
+            self.close()
+
+    def next_open(self):
+        # Check if we are in the market
+        if not self.position and self.long_condition():
+            # Buy signal: CCI crosses above the oversold threshold
+            self.cash = self.broker.getcash()
+            next_day_open = self.data.open[0]
+            size_to_buy = int(self.cash / next_day_open)
+            self.buy(exectype=bt.Order.Market, size=size_to_buy)

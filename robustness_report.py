@@ -11,20 +11,24 @@ import pandas as pd
 
 # Local Imports
 from strategy_report import backtest
-from strategies import RandomStrategy, WilliamsRStrategy
+from strategies import RandomStrategy, WilliamsRStrategy, CCIStrategy
 
 def strategy_class(strategy):
   if strategy == 'WilliamsR':
     return WilliamsRStrategy
   elif strategy == 'Random':
     return RandomStrategy
+  elif strategy == 'CCI':
+    return CCIStrategy
 
 def vsrandom(args):
   '''
   Compare strategy results to a random entry and exit strategy
   '''
   params = pd.read_csv(args.strategy_report+"/best_parameters.csv").set_index("symbol").to_dict(orient="index")
+  
   for file in os.listdir(args.data):
+    data_results = defaultdict(list)
     symbol = file.split(".")[0]
     random_results = []
     for _ in tqdm(range(args.vsrandom_itrs), desc="Running vsrandom test"):
@@ -33,12 +37,55 @@ def vsrandom(args):
     plt.figure(figsize=(10, 6), dpi=300)
     plt.axhline(y=100000, color='black', linestyle='--', linewidth=2)
 
-    for results in random_results:
-      equity_curve = results[0].analyzers.cash_value.get_analysis()
-      plt.plot(equity_curve, color='lightgrey', alpha=0.5)
+    for i, strat in enumerate(random_results):
+      equity_curve = strat[0].analyzers.cash_value.get_analysis()
+      returns_stats = strat[0].analyzers.returns.get_analysis()
+      trade_stats = strat[0].analyzers.trade_stats.get_analysis()
+      drawdown_stats = strat[0].analyzers.drawdown.get_analysis()
+      in_market_stats = strat[0].analyzers.in_market.get_analysis()
+      data_results["symbol"].append(f"random{i+1}")
+      data_results["period"].append(-1)
+      data_results["lowerband"].append(-1)
+      data_results["upperband"].append(-1)
+      data_results["total_return"].append(returns_stats['rtot'])
+      data_results["cagr"].append(returns_stats['rnorm'])
+      data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+      data_results["sharpe"].append(strat[0].analyzers.sharpe.get_analysis()['sharperatio'])
+      data_results["sortino"].append(strat[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+      data_results["total_trades"].append(trade_stats.total.closed)
+      data_results["winning_trades"].append(trade_stats.won.total)
+      data_results["losing_trades"].append(trade_stats.lost.total)
+      data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+      data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+      data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+      data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+      data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+      
+      plt.plot(equity_curve, color='lightgrey', alpha=0.5, zorder=1)
 
     strategy_results = backtest(f"{args.data}/{file}", strategy_class(args.strategy), params[symbol], args)
-    plt.plot(strategy_results[0].analyzers.cash_value.get_analysis(), color='red', alpha=1)
+    returns_stats = strategy_results[0].analyzers.returns.get_analysis()
+    trade_stats = strategy_results[0].analyzers.trade_stats.get_analysis()
+    drawdown_stats = strategy_results[0].analyzers.drawdown.get_analysis()
+    in_market_stats = strategy_results[0].analyzers.in_market.get_analysis()
+    data_results["symbol"].append(symbol)
+    data_results["period"].append(strategy_results[0].params.period)
+    data_results["lowerband"].append(strategy_results[0].params.lowerband)
+    data_results["upperband"].append(strategy_results[0].params.upperband)
+    data_results["total_return"].append(returns_stats['rtot'])
+    data_results["cagr"].append(returns_stats['rnorm'])
+    data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+    data_results["sharpe"].append(strategy_results[0].analyzers.sharpe.get_analysis()['sharperatio'])
+    data_results["sortino"].append(strategy_results[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+    data_results["total_trades"].append(trade_stats.total.closed)
+    data_results["winning_trades"].append(trade_stats.won.total)
+    data_results["losing_trades"].append(trade_stats.lost.total)
+    data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+    data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+    data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+    data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+    data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+    plt.plot(strategy_results[0].analyzers.cash_value.get_analysis(), color='red', alpha=1, zorder=3)
 
     # Set the y-ticks and labels
     plt.title(f"{args.strategy} Equity Curve vs Random")
@@ -51,6 +98,7 @@ def vsrandom(args):
     if not os.path.exists(args.strategy_report+"/vsrandom/"):
       os.makedirs(args.strategy_report+"/vsrandom/")
     plt.savefig(f"{args.strategy_report}/vsrandom/{symbol}_vsrandom_curve.png")
+    pd.DataFrame(data_results).to_csv(f"{args.strategy_report}/vsrandom/{symbol}_results.csv", index=False)
 
 def mc_randomized_entry(args):
   '''
@@ -80,12 +128,56 @@ def mc_randomized_entry(args):
       random_results[symbol].append(backtest(f"{args.data}/{file}", strategy, params[symbol], args))
 
   for symbol in strategy_results:
+    data_results = defaultdict(list)
     plt.figure(figsize=(10, 6), dpi=300)
     plt.axhline(y=100000, color='black', linestyle='--', linewidth=2)
 
     plt.plot(strategy_results[symbol][0].analyzers.cash_value.get_analysis(), color='red', alpha=1, zorder=3)
-    for rand_result in random_results[symbol]:
-      plt.plot(rand_result[0].analyzers.cash_value.get_analysis(), color='lightgrey', alpha=0.5, zorder=1)
+    returns_stats = strategy_results[symbol][0].analyzers.returns.get_analysis()
+    trade_stats = strategy_results[symbol][0].analyzers.trade_stats.get_analysis()
+    drawdown_stats = strategy_results[symbol][0].analyzers.drawdown.get_analysis()
+    in_market_stats = strategy_results[symbol][0].analyzers.in_market.get_analysis()
+    data_results["symbol"].append(symbol)
+    data_results["period"].append(strategy_results[symbol][0].params.period)
+    data_results["lowerband"].append(strategy_results[symbol][0].params.lowerband)
+    data_results["upperband"].append(strategy_results[symbol][0].params.upperband)
+    data_results["total_return"].append(returns_stats['rtot'])
+    data_results["cagr"].append(returns_stats['rnorm'])
+    data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+    data_results["sharpe"].append(strategy_results[symbol][0].analyzers.sharpe.get_analysis()['sharperatio'])
+    data_results["sortino"].append(strategy_results[symbol][0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+    data_results["total_trades"].append(trade_stats.total.closed)
+    data_results["winning_trades"].append(trade_stats.won.total)
+    data_results["losing_trades"].append(trade_stats.lost.total)
+    data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+    data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+    data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+    data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+    data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+
+    for i, strat in enumerate(random_results[symbol]):
+      returns_stats = strat[0].analyzers.returns.get_analysis()
+      trade_stats = strat[0].analyzers.trade_stats.get_analysis()
+      drawdown_stats = strat[0].analyzers.drawdown.get_analysis()
+      in_market_stats = strat[0].analyzers.in_market.get_analysis()
+      data_results["symbol"].append(f"random{i+1}")
+      data_results["period"].append(strat[0].params.period)
+      data_results["lowerband"].append(strat[0].params.lowerband)
+      data_results["upperband"].append(strat[0].params.upperband)
+      data_results["total_return"].append(returns_stats['rtot'])
+      data_results["cagr"].append(returns_stats['rnorm'])
+      data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+      data_results["sharpe"].append(strat[0].analyzers.sharpe.get_analysis()['sharperatio'])
+      data_results["sortino"].append(strat[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+      data_results["total_trades"].append(trade_stats.total.closed)
+      data_results["winning_trades"].append(trade_stats.won.total)
+      data_results["losing_trades"].append(trade_stats.lost.total)
+      data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+      data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+      data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+      data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+      data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+      plt.plot(strat[0].analyzers.cash_value.get_analysis(), color='lightgrey', alpha=0.5, zorder=1)
 
     # Set the y-ticks and labels
     plt.title(f"{args.strategy} Equity Curve vs Random Entry")
@@ -98,6 +190,7 @@ def mc_randomized_entry(args):
     if not os.path.exists(args.strategy_report+"/mcrandomentry/"):
       os.makedirs(args.strategy_report+"/mcrandomentry/")
     plt.savefig(f"{args.strategy_report}/mcrandomentry/{symbol}_mcrandomentry_curve.png")
+    pd.DataFrame(data_results).to_csv(f"{args.strategy_report}/mcrandomentry/{symbol}_results.csv", index=False)
 
 
 def mc_randomized_exit(args):
@@ -128,12 +221,56 @@ def mc_randomized_exit(args):
       random_results[symbol].append(backtest(f"{args.data}/{file}", strategy, params[symbol], args))
 
   for symbol in strategy_results:
+    data_results = defaultdict(list)
     plt.figure(figsize=(10, 6), dpi=300)
     plt.axhline(y=100000, color='black', linestyle='--', linewidth=2)
 
     plt.plot(strategy_results[symbol][0].analyzers.cash_value.get_analysis(), color='red', alpha=1, zorder=3)
-    for rand_result in random_results[symbol]:
-      plt.plot(rand_result[0].analyzers.cash_value.get_analysis(), color='lightgrey', alpha=0.5, zorder=1)
+    returns_stats = strategy_results[symbol][0].analyzers.returns.get_analysis()
+    trade_stats = strategy_results[symbol][0].analyzers.trade_stats.get_analysis()
+    drawdown_stats = strategy_results[symbol][0].analyzers.drawdown.get_analysis()
+    in_market_stats = strategy_results[symbol][0].analyzers.in_market.get_analysis()
+    data_results["symbol"].append(symbol)
+    data_results["period"].append(strategy_results[symbol][0].params.period)
+    data_results["lowerband"].append(strategy_results[symbol][0].params.lowerband)
+    data_results["upperband"].append(strategy_results[symbol][0].params.upperband)
+    data_results["total_return"].append(returns_stats['rtot'])
+    data_results["cagr"].append(returns_stats['rnorm'])
+    data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+    data_results["sharpe"].append(strategy_results[symbol][0].analyzers.sharpe.get_analysis()['sharperatio'])
+    data_results["sortino"].append(strategy_results[symbol][0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+    data_results["total_trades"].append(trade_stats.total.closed)
+    data_results["winning_trades"].append(trade_stats.won.total)
+    data_results["losing_trades"].append(trade_stats.lost.total)
+    data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+    data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+    data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+    data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+    data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+
+    for i, strat in enumerate(random_results[symbol]):
+      returns_stats = strat[0].analyzers.returns.get_analysis()
+      trade_stats = strat[0].analyzers.trade_stats.get_analysis()
+      drawdown_stats = strat[0].analyzers.drawdown.get_analysis()
+      in_market_stats = strat[0].analyzers.in_market.get_analysis()
+      data_results["symbol"].append(f"random{i+1}")
+      data_results["period"].append(strat[0].params.period)
+      data_results["lowerband"].append(strat[0].params.lowerband)
+      data_results["upperband"].append(strat[0].params.upperband)
+      data_results["total_return"].append(returns_stats['rtot'])
+      data_results["cagr"].append(returns_stats['rnorm'])
+      data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+      data_results["sharpe"].append(strat[0].analyzers.sharpe.get_analysis()['sharperatio'])
+      data_results["sortino"].append(strat[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+      data_results["total_trades"].append(trade_stats.total.closed)
+      data_results["winning_trades"].append(trade_stats.won.total)
+      data_results["losing_trades"].append(trade_stats.lost.total)
+      data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+      data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+      data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+      data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+      data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+      plt.plot(strat[0].analyzers.cash_value.get_analysis(), color='lightgrey', alpha=0.5, zorder=1)
 
     # Set the y-ticks and labels
     plt.title(f"{args.strategy} Equity Curve vs Random Exit")
@@ -146,6 +283,7 @@ def mc_randomized_exit(args):
     if not os.path.exists(args.strategy_report+"/mcrandomexit/"):
       os.makedirs(args.strategy_report+"/mcrandomexit/")
     plt.savefig(f"{args.strategy_report}/mcrandomexit/{symbol}_mcrandomexit_curve.png")
+    pd.DataFrame(data_results).to_csv(f"{args.strategy_report}/mcrandomexit/{symbol}_results.csv", index=False)
 
 def main(args):
   for test in args.robustness_tests:
@@ -165,7 +303,7 @@ if __name__ == "__main__":
   parser.add_argument("--data", type=str, required=True, help="Path to the folder containing the data")
   parser.add_argument('--strategy', type=str, required=True, 
                     help="Strategy to use for backtesting", 
-                    choices=['WilliamsR'])
+                    choices=['WilliamsR', 'CCI'])
 
   # Test Arguments
   parser.add_argument('--cash', type=int, default=100000, help="Starting Cash for trading")

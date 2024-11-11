@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 
 # Local Imports
 import utils
-from strategies import WilliamsRStrategy, RandomStrategy
+from strategies import WilliamsRStrategy, RandomStrategy, CCIStrategy
 from analyzers import InMarketAnalyzer, CashValueAnalyzer, SortinoRatio
 
 def opt_universe(data_path, strategy, optimization_args, args):
@@ -175,6 +175,8 @@ def main(args):
     strategy = RandomStrategy
   elif args.strategy == 'WilliamsR':
     strategy = WilliamsRStrategy
+  elif args.strategy == 'CCI':
+    strategy = CCIStrategy
   else:
     exit(f"Strategy {args.strategy} not found")
 
@@ -233,7 +235,7 @@ if __name__ == "__main__":
   # Strategy arguments
   parser.add_argument('--strategy', type=str, required=True, 
                       help="Strategy to use for backtesting", 
-                      choices=['WilliamsR'])
+                      choices=['WilliamsR', 'CCI'])
   parser.add_argument('--strat-args', type=str, default='', help="Additional arguments for the strategy wrapped in quotes \"arg1:value1 arg2:value2\"")
   
   args = parser.parse_args()
