@@ -183,7 +183,11 @@ def main(args):
   # This will build an optimization universe for each of the symbols in the training data
   optimization_args, opt_step_sizes = strategy.get_optimization_args(**args.strat_args)
   symbol_runs = {}
-  for train_data in tqdm(os.listdir(args.train_data), desc="Building Optimization Universe"):
+  train_data_files = []
+  for train_data in os.listdir(args.train_data):
+    if train_data.endswith(".csv"):
+      train_data_files.append(train_data)
+  for train_data in tqdm(train_data_files, desc="Building Optimization Universe"):
     symbol_runs[train_data.split("_")[0]] = opt_universe(f"{args.train_data}/{train_data}", strategy, optimization_args, args)
   
   opt_uni_df = get_opt_universe_df(symbol_runs, save_folder=output_folder)
