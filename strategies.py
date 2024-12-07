@@ -251,6 +251,8 @@ class CCIStrategy(bt.Strategy):
         self.equity_curve = []
         self.cci = bt.indicators.CommodityChannelIndex(period=self.params.period)
 
+        self.dates = []
+
     @staticmethod
     def get_optimization_args(**kwargs) -> tuple[dict[str, list], dict[str, int]]:
         opt_args = {}
@@ -302,26 +304,32 @@ class CCIStrategy(bt.Strategy):
         return opt_args, steps
     
     def long_condition(self):
-        if self.cci[0] > self.params.lowerband:
+        if self.cci[0] < self.params.lowerband:
             return True
         else:
             return False
         
     def close_condition(self):
-        if self.cci[0] < self.params.upperband:
+        if self.cci[0] > self.params.upperband:
             return True
         else:
             return False
+        # print(self.datas[0].datetime[0], self.datas[0].close[0], self.datas[0].high[-1])
+        # if self.datas[0].close[0] > self.datas[0].high[-1]:
+        #     return True
+        # else:
+        #     return False
 
     def next(self):
+        self.dates.append(self.datas[0].datetime[0])
         self.equity_curve.append(self.broker.getvalue())
         # Check if we are in the market
         if not self.cheating:
             if not self.position and self.long_condition():
                 # Buy signal: CCI crosses above the oversold threshold
                 self.buy(exectype=bt.Order.Market)
-        if self.position and self.close_condition():
-            self.close()
+            if self.position and self.close_condition():
+                self.close()
 
     def next_open(self):
         # Check if we are in the market
@@ -331,3 +339,5 @@ class CCIStrategy(bt.Strategy):
             next_day_open = self.data.open[0]
             size_to_buy = int(self.cash / next_day_open)
             self.buy(exectype=bt.Order.Market, size=size_to_buy)
+        if self.position and self.close_condition():
+            self.close()

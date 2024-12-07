@@ -54,48 +54,63 @@ def opt_universe(data_path, strategy, optimization_args, args):
 
   return runs
 
-def get_opt_universe_df(results, save_folder="", save=True):
+def get_opt_universe_df(results, symbol, opt_step_sizes, save_folder="", save=True):
   data_results = defaultdict(list)
-  for symbol in results:
-    runs = results[symbol]
-    for strat in runs:
-      returns_stats = strat[0].analyzers.returns.get_analysis()
-      trade_stats = strat[0].analyzers.trade_stats.get_analysis()
-      drawdown_stats = strat[0].analyzers.drawdown.get_analysis()
-      in_market_stats = strat[0].analyzers.in_market.get_analysis()
+  for strat in results:
+    returns_stats = strat[0].analyzers.returns.get_analysis()
+    trade_stats = strat[0].analyzers.trade_stats.get_analysis()
+    drawdown_stats = strat[0].analyzers.drawdown.get_analysis()
+    in_market_stats = strat[0].analyzers.in_market.get_analysis()
 
-      data_results["symbol"].append(symbol)
-      data_results["period"].append(strat[0].params.period)
-      data_results["lowerband"].append(strat[0].params.lowerband)
-      data_results["upperband"].append(strat[0].params.upperband)
-      data_results["total_return"].append(returns_stats['rtot'])
-      data_results["cagr"].append(returns_stats['rnorm'])
-      data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
-      data_results["sharpe"].append(strat[0].analyzers.sharpe.get_analysis()['sharperatio'])
-      data_results["sortino"].append(strat[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
-      data_results["total_trades"].append(trade_stats.total.closed)
-      data_results["winning_trades"].append(trade_stats.won.total)
-      data_results["losing_trades"].append(trade_stats.lost.total)
-      data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
-      data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
-      data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
-      data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
-      data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
-  df = pd.DataFrame(data_results)
-  if save:
-    df.to_csv(f"{save_folder}/optimization_results.csv", index=False)
-  return df
-
-def get_best_parameters_df(best_params, opt_params, save_folder="", save=True):
-  data_results = defaultdict(list)
-  for symbol, values in best_params.items():
     data_results["symbol"].append(symbol)
-    for param in opt_params.keys():
-      data_results[param].append(values[param])
+    data_results["period"].append(strat[0].params.period)
+    data_results["lowerband"].append(strat[0].params.lowerband)
+    data_results["upperband"].append(strat[0].params.upperband)
+    data_results["total_return"].append(returns_stats['rtot'])
+    data_results["cagr"].append(returns_stats['rnorm'])
+    data_results["return_per_exposer"].append(returns_stats['rnorm'] / (in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"]))
+    data_results["sharpe"].append(strat[0].analyzers.sharpe.get_analysis()['sharperatio'])
+    data_results["sortino"].append(strat[0].analyzers.sortino.get_analysis()['Sortino Ratio'])
+    data_results["total_trades"].append(trade_stats.total.closed)
+    data_results["winning_trades"].append(trade_stats.won.total)
+    data_results["losing_trades"].append(trade_stats.lost.total)
+    data_results["time_in_market"].append(in_market_stats["Total In-Market Bars"] / in_market_stats["Total Bars"])
+    data_results["profit_factor"].append(in_market_stats["Total Gains"] / in_market_stats["Total Losses"])
+    data_results["avg_gain"].append(in_market_stats["Total Percent Gain"] / trade_stats.total.closed)
+    data_results["max_drawdown"].append(drawdown_stats.max.drawdown)
+    data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
+  
+  df = pd.DataFrame(data_results)
+
+  if save:
+    if os.path.exists(f"{save_folder}/optimization_results.csv"):
+      existing_df = pd.read_csv(f"{save_folder}/optimization_results.csv")
+      merge_columns = ["symbol"]
+      merge_columns.extend([param for param in opt_step_sizes.keys()])
+      updated_df = pd.concat([df, existing_df[~existing_df[merge_columns].apply(tuple, 1).isin(df[merge_columns].apply(tuple, 1))]])
+      updated_df.to_csv(f"{save_folder}/optimization_results.csv", index=False)
+    else:
+      df.to_csv(f"{save_folder}/optimization_results.csv", index=False)
+
+  return df
+
+def get_best_parameters_df(best_params, opt_params, symbol, save_folder="", save=True):
+  data_results = defaultdict(list)
+  data_results["symbol"].append(symbol)
+
+  for param in opt_params.keys():
+    data_results[param].append(best_params[param])
   df = pd.DataFrame(data_results)
   if save:
-    df.to_csv(f"{save_folder}/best_parameters.csv", index=False)
-  return df
+    if os.path.exists(f"{save_folder}/best_parameters.csv"):
+      existing_df = pd.read_csv(f"{save_folder}/best_parameters.csv")
+      merge_columns = ["symbol"]
+      updated_df = pd.concat([df, existing_df[~existing_df[merge_columns].apply(tuple, 1).isin(df[merge_columns].apply(tuple, 1))]])
+      updated_df.to_csv(f"{save_folder}/best_parameters.csv", index=False)
+      return updated_df
+    else:
+      df.to_csv(f"{save_folder}/best_parameters.csv", index=False)
+      return df
 
 def get_test_results_df(results, save_folder="", save=True):
   data_results = defaultdict(list)
@@ -125,6 +140,7 @@ def get_test_results_df(results, save_folder="", save=True):
     data_results["max_drawdown_duration"].append(drawdown_stats.max.len)
 
   df = pd.DataFrame(data_results)
+
   if save:
     df.to_csv(f"{save_folder}/test_results.csv", index=False)
   return df
@@ -161,14 +177,7 @@ def backtest(data_path, strategy, parameters, args):
 
 def main(args):
   output_folder = f"Reports/{args.output_folder}"
-  if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
-  else:
-    i = 1
-    while os.path.exists(f"{output_folder}_{i}"):
-      i += 1
-    output_folder = f"{output_folder}_{i}"
-    os.makedirs(output_folder)
+  os.makedirs(f"Reports/{args.output_folder}", exist_ok=True)
 
   strategy = None
   if args.strategy == 'Random':
@@ -182,25 +191,21 @@ def main(args):
 
   # This will build an optimization universe for each of the symbols in the training data
   optimization_args, opt_step_sizes = strategy.get_optimization_args(**args.strat_args)
-  symbol_runs = {}
-  train_data_files = []
-  for train_data in os.listdir(args.train_data):
-    if train_data.endswith(".csv"):
-      train_data_files.append(train_data)
-  for train_data in tqdm(train_data_files, desc="Building Optimization Universe"):
-    symbol_runs[train_data.split("_")[0]] = opt_universe(f"{args.train_data}/{train_data}", strategy, optimization_args, args)
+
+  opt_run = opt_universe(f"{args.train_data}", strategy, optimization_args, args)
   
-  opt_uni_df = get_opt_universe_df(symbol_runs, save_folder=output_folder)
+  opt_uni_df = get_opt_universe_df(opt_run, args.symbol, opt_step_sizes, save_folder=output_folder)
 
   # Get the best parameters for each symbol
     # Best parameters are by symbol and by strategy
   best_params = utils.find_best_params(opt_uni_df, args.opt_param, opt_step_sizes, n=args.opt_neighbors)
-  best_params_df = get_best_parameters_df(best_params, opt_step_sizes, save_folder=output_folder)
+  best_params_df = get_best_parameters_df(best_params, opt_step_sizes, args.symbol, save_folder=output_folder)
 
-  # Backtest the best parameters for each symbol on the test data
+  # Backtest the best parameters for each symbol on the test data to get graph
   test_results = {}
+  best_params_dict = best_params_df.set_index('symbol').to_dict(orient='index')
   for symbol in tqdm(best_params_df['symbol'], desc="Backtesting Best Parameters"):
-    test_results[symbol] = backtest(f'{args.test_data}/{symbol}_test.csv', strategy, best_params[symbol], args)
+    test_results[symbol] = backtest(f'{args.test_data}/{symbol}_test.csv', strategy, best_params_dict[symbol], args)
   
   test_results_df = get_test_results_df(test_results, save_folder=output_folder)
   
@@ -233,8 +238,9 @@ if __name__ == "__main__":
   parser.add_argument('--output-folder', type=str, default='exp', help="Folder to save strategy report, increments if it already exists")
 
   # Data arguments
-  parser.add_argument('--train-data', type=str, default='Data/train', help="Path to training data, each file should be named symbol_train.csv")
-  parser.add_argument('--test-data', type=str, default='Data/test', help="Path to testing data, test data must include the same symbols as train data named symbol_test.csv")
+  parser.add_argument('--symbol', type=str, required=True, help='Security symbol')
+  parser.add_argument('--train-data', type=str, required=True, help="Path to training data, each file should be named symbol_train.csv")
+  parser.add_argument('--test-data', type=str, required=True, help="Path to testing data, test data must include the same symbols as train data named symbol_test.csv")
 
   # Strategy arguments
   parser.add_argument('--strategy', type=str, required=True, 

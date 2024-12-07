@@ -21,36 +21,25 @@ def find_best_params(metrics_df: pd.DataFrame,
   Finds the best n-neighborhood for a specific target parameters,
     where n=1 is the best single point
   '''
-  # Create a dictionary to store the best triple for each symbol
-  best_neighborhood = {}
+  best_avg_target = float('-inf')
+  curr_best = None
 
-  # Iterate through each symbol in the DataFrame
-  for symbol in metrics_df['symbol'].unique():
-    # Filter the DataFrame to only include rows for the current symbol
-    symbol_data = metrics_df[metrics_df['symbol'] == symbol]
+  # Iterate through each row for the current symbol
+  for _, row in metrics_df.iterrows():
+    # Get the neighboring points for the current row, considering n neighbors
+    # TODO: Make this work for other strategies (get strat params as params to this function)
+    # neighbors = symbol_data
+    # for param, step in params.items():
+    #   neighbors = neighbors[(symbol_data[param].between(row[param] - (step*n), row[param] + (step*n)))]
 
-    best_avg_target = float('-inf')
-    curr_best = None
+    neighbors = get_neighbors(metrics_df, row, params, n)
 
-    # Iterate through each row for the current symbol
-    for _, row in symbol_data.iterrows():
-      # Get the neighboring points for the current row, considering n neighbors
-      # TODO: Make this work for other strategies (get strat params as params to this function)
-      # neighbors = symbol_data
-      # for param, step in params.items():
-      #   neighbors = neighbors[(symbol_data[param].between(row[param] - (step*n), row[param] + (step*n)))]
+    # Calculate the average CAGR of the current point and its neighbors
+    avg_target = agg_func(neighbors[target])
 
-      neighbors = get_neighbors(symbol_data, row, params, n)
+    # Update the best triple if the current average CAGR is higher
+    if avg_target > best_avg_target:
+      best_avg_target = avg_target
+      curr_best = {param: row[param] for param in params.keys()}
 
-      # Calculate the average CAGR of the current point and its neighbors
-      avg_target = agg_func(neighbors[target])
-
-      # Update the best triple if the current average CAGR is higher
-      if avg_target > best_avg_target:
-        best_avg_target = avg_target
-        curr_best = {param: row[param] for param in params.keys()}
-
-    # Store the best triple for the current symbol
-    best_neighborhood[symbol] = curr_best
-
-  return best_neighborhood
+  return curr_best
