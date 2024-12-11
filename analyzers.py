@@ -1,6 +1,7 @@
 import backtrader as bt
 import math
 
+
 class InMarketAnalyzer(bt.Analyzer):
     def __init__(self):
         self.total_bars = 0
@@ -26,13 +27,14 @@ class InMarketAnalyzer(bt.Analyzer):
 
     def get_analysis(self):
         return {
-            'Total Bars': self.total_bars,
-            'Total In-Market Bars': self.in_market_bars,
-            'Total Percent Gain': self.total_percent_gain,
-            'Total Gains': self.total_gain,
-            'Total Losses': self.total_loss
+            "Total Bars": self.total_bars,
+            "Total In-Market Bars": self.in_market_bars,
+            "Total Percent Gain": self.total_percent_gain,
+            "Total Gains": self.total_gain,
+            "Total Losses": self.total_loss,
         }
-    
+
+
 class CashValueAnalyzer(bt.Analyzer):
     def __init__(self):
         self.cash_values = []
@@ -44,16 +46,15 @@ class CashValueAnalyzer(bt.Analyzer):
         return self.cash_values
 
 
-import math
-import backtrader as bt
-
 class SortinoRatio(bt.Analyzer):
     def __init__(self):
         self.returns = []
         self.negative_returns = []
         self.cumulative_return = 0.0
         self.annual_risk_free_rate = 0  # Example risk-free rate (3% annually)
-        self.hourly_risk_free_rate = (1 + self.annual_risk_free_rate) ** (1/8760) - 1
+        self.hourly_risk_free_rate = (1 + self.annual_risk_free_rate) ** (
+            1 / 8760
+        ) - 1
         self.prev_value = self.strategy.broker.getvalue()
 
     def next(self):
@@ -66,16 +67,25 @@ class SortinoRatio(bt.Analyzer):
 
         # Track negative returns for downside risk calculation
         if hourly_return < self.hourly_risk_free_rate:
-            self.negative_returns.append(hourly_return - self.hourly_risk_free_rate)
+            self.negative_returns.append(
+                hourly_return - self.hourly_risk_free_rate
+            )
 
     def get_analysis(self):
         if not self.returns or not self.negative_returns:
-            return {'Sortino Ratio': None}
+            return {"Sortino Ratio": None}
 
         avg_return = sum(self.returns) / len(self.returns)
-        downside_deviation = math.sqrt(sum(r ** 2 for r in self.negative_returns) / len(self.negative_returns))
+        downside_deviation = math.sqrt(
+            sum(r**2 for r in self.negative_returns)
+            / len(self.negative_returns)
+        )
 
         # Calculate the Sortino ratio
-        sortino_ratio = (avg_return - self.hourly_risk_free_rate) / downside_deviation if downside_deviation != 0 else None
+        sortino_ratio = (
+            (avg_return - self.hourly_risk_free_rate) / downside_deviation
+            if downside_deviation != 0
+            else None
+        )
 
-        return {'Sortino Ratio': sortino_ratio}
+        return {"Sortino Ratio": sortino_ratio}

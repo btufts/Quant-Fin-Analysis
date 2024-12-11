@@ -1,45 +1,410 @@
 # System Imports
+from __future__ import (
+    absolute_import,
+    division,
+    print_function,
+    unicode_literals,
+)
 from typing import Callable
 
 # Third party imports
 import pandas as pd
 
+import collections
+from datetime import datetime
+import io
+import itertools
+
+from backtrader import feed
+from backtrader.utils import date2num
+
+
+# This is a copy from backtrader with some
+# modifications to be able to have datetime
+# instead of just date
+class YahooFinanceCSVData(feed.CSVDataBase):
+    lines = ("adjclose",)
+
+    params = (
+        ("reverse", False),
+        ("adjclose", True),
+        ("adjvolume", True),
+        ("round", True),
+        ("decimals", 2),
+        ("roundvolume", False),
+        ("swapcloses", False),
+    )
+
+    def start(self):
+        super(YahooFinanceCSVData, self).start()
+
+        if not self.params.reverse:
+            return
+
+        dq = collections.deque()
+        for line in self.f:
+            dq.appendleft(line)
+
+        f = io.StringIO(newline=None)
+        f.writelines(dq)
+        f.seek(0)
+        self.f.close()
+        self.f = f
+
+    def _loadline(self, linetokens):
+        while True:
+            nullseen = False
+            for tok in linetokens[1:]:
+                if tok == "null":
+                    nullseen = True
+                    linetokens = self._getnextline()
+                    if not linetokens:
+                        return False
+
+                    break
+
+            if not nullseen:
+                break
+
+        i = itertools.count(0)
+
+        dttxt = linetokens[next(i)]
+        dt = datetime.strptime(dttxt, "%Y-%m-%d %H:%M:%S")
+        dtnum = date2num(dt)
+
+        self.lines.datetime[0] = dtnum
+        o = float(linetokens[next(i)])
+        h = float(linetokens[next(i)])
+        low = float(linetokens[next(i)])
+        c = float(linetokens[next(i)])
+        self.lines.openinterest[0] = 0.0
+
+        adjustedclose = float(linetokens[next(i)])
+        try:
+            v = float(linetokens[next(i)])
+        except ValueError:
+            v = 0.0
+
+        if self.p.swapcloses:
+            c, adjustedclose = adjustedclose, c
+
+        adjfactor = c / adjustedclose
+
+        if self.params.adjclose:
+            o /= adjfactor
+            h /= adjfactor
+            low /= adjfactor
+            c = adjustedclose
+            if self.p.adjvolume:
+                v *= adjfactor
+
+        if self.p.round:
+            decimals = self.p.decimals
+            o = round(o, decimals)
+            h = round(h, decimals)
+            low = round(low, decimals)
+            c = round(c, decimals)
+
+        v = round(v, self.p.roundvolume)
+
+        self.lines.open[0] = o
+        self.lines.high[0] = h
+        self.lines.low[0] = low
+        self.lines.close[0] = c
+        self.lines.volume[0] = v
+        self.lines.adjclose[0] = adjustedclose
+
+        return True
+
+
 def get_neighbors(symbol_data, row, params, n):
-    # Initialize the condition to True so we can apply multiple conditions using & operator
+    # Initialize the condition to True so we can
+    # apply multiple conditions using & operator
     condition = True
     for param, step in params.items():
-        condition &= symbol_data[param].between(row[param] - (n * step), row[param] + (n * step))
+        condition &= symbol_data[param].between(
+            row[param] - (n * step), row[param] + (n * step)
+        )
     # Filter based on the dynamic condition
     neighbors = symbol_data[condition]
     return neighbors
 
-def find_best_params(metrics_df: pd.DataFrame, 
-                     target: str, params: dict[str, int], 
-                     n:int=1, agg_func:Callable[[pd.Series], float]=pd.Series.median
-                     ) -> dict[str, tuple]:
-  '''
-  Finds the best n-neighborhood for a specific target parameters,
-    where n=1 is the best single point
-  '''
-  best_avg_target = float('-inf')
-  curr_best = None
 
-  # Iterate through each row for the current symbol
-  for _, row in metrics_df.iterrows():
-    # Get the neighboring points for the current row, considering n neighbors
-    # TODO: Make this work for other strategies (get strat params as params to this function)
-    # neighbors = symbol_data
-    # for param, step in params.items():
-    #   neighbors = neighbors[(symbol_data[param].between(row[param] - (step*n), row[param] + (step*n)))]
+def find_best_params(
+    metrics_df: pd.DataFrame,
+    target: str,
+    params: dict[str, int],
+    n: int = 1,
+    agg_func: Callable[[pd.Series], float] = pd.Series.mean,
+) -> dict[str, tuple]:
+    """
+    Finds the best n-neighborhood for a specific target parameters,
+      where n=1 is the best single point
+    """
+    best_avg_target = float("-inf")
+    curr_best = None
 
-    neighbors = get_neighbors(metrics_df, row, params, n)
+    # Iterate through each row for the current symbol
+    for _, row in metrics_df.iterrows():
+        # Get the neighboring points for the
+        # current row, considering n neighbors
+        # TODO: Make this work for other
+        # strategies (get strat params as params to this function)
+        # neighbors = symbol_data
+        # for param, step in params.items():
+        #   neighbors = neighbors[(symbol_data[param].between(row[param] -
+        # (step*n), row[param] + (step*n)))]
 
-    # Calculate the average CAGR of the current point and its neighbors
-    avg_target = agg_func(neighbors[target])
+        neighbors = get_neighbors(metrics_df, row, params, n)
 
-    # Update the best triple if the current average CAGR is higher
-    if avg_target > best_avg_target:
-      best_avg_target = avg_target
-      curr_best = {param: row[param] for param in params.keys()}
+        # Calculate the average CAGR of the current point and its neighbors
+        avg_target = agg_func(neighbors[target])
 
-  return curr_best
+        # Update the best triple if the current average CAGR is higher
+        if avg_target > best_avg_target:
+            best_avg_target = avg_target
+            curr_best = {param: row[param] for param in params.keys()}
+
+    return curr_best
+
+
+def reorder_csv(file_path, datetime=False):
+    # Read the CSV file
+    df = pd.read_csv(file_path)
+
+    date_title = "Date"
+    if datetime:
+        date_title = "Datetime"
+
+    # Expected column order
+    expected_order = [
+        date_title,
+        "Open",
+        "High",
+        "Low",
+        "Close",
+        "Adj Close",
+        "Volume",
+    ]
+
+    # Check if all expected columns are present
+    missing_columns = set(expected_order) - set(df.columns)
+    if missing_columns:
+        raise ValueError(f"Missing columns: {missing_columns}")
+
+    # Reorder the columns
+    df = df[expected_order]
+
+    # Save the reordered DataFrame back to the same CSV file
+    df.to_csv(file_path, index=False)
+    print(f"File {file_path} has been successfully reordered and saved.")
+
+
+def print_strategy_stats(strategy):
+    # Extract statistics from analyzers
+    returns_stats = strategy.analyzers.returns.get_analysis()
+    trade_stats = strategy.analyzers.trade_stats.get_analysis()
+    drawdown_stats = strategy.analyzers.drawdown.get_analysis()
+    in_market_stats = strategy.analyzers.in_market.get_analysis()
+    # sharpe_ratio = strategy.analyzers.sharpe.get_analysis().get(
+    #     "sharperatio", "N/A"
+    # )
+    # sortino_ratio = strategy.analyzers.sortino.get_analysis().get(
+    #     "Sortino Ratio", "N/A"
+    # )
+
+    # Calculate derived metrics
+    total_in_market_bars = in_market_stats.get("Total In-Market Bars", 0)
+    total_bars = in_market_stats.get("Total Bars", 1)
+    total_gains = in_market_stats.get("Total Gains", 1)
+    total_losses = in_market_stats.get("Total Losses", 1)
+    time_in_market = total_in_market_bars / total_bars if total_bars > 0 else 0
+    return_per_exposure = (
+        returns_stats["rnorm"] / time_in_market if time_in_market > 0 else 0
+    )
+    profit_factor = total_gains / total_losses if total_losses > 0 else "N/A"
+    avg_gain = (
+        in_market_stats.get("Total Percent Gain", 0) / trade_stats.total.closed
+        if trade_stats.total.closed > 0
+        else "N/A"
+    )
+
+    # Assemble data into a markdown table
+    markdown_table = f"""
+| Metric                          | Value         |
+|---------------------------------|---------------|
+| Initial Capital                 | {strategy.broker.startingcash:.2f}     |
+| Ending Capital                  | {strategy.broker.getvalue():.2f}      |
+| Net Profit                      | {strategy.broker.getvalue() -
+                                     strategy.broker.startingcash:.2f} |
+| Net Profit %                    | {returns_stats['rtot'] * 100:.2f}%    |
+| Exposure %                      | {time_in_market * 100:.2f}%           |
+| Net Risk Adjusted Return        | {return_per_exposure * 100:.2f}%      |
+| Annual Return %                 | {returns_stats['rnorm'] * 100:.2f}%   |
+| Risk Adjusted Return %          | {return_per_exposure * 100:.2f}%      |
+| Transaction Costs               | 0.00                                  |
+
+| All Trades                      |               |
+|---------------------------------|---------------|
+| Total Number of Trades          | {trade_stats.total.closed}            |
+| Avg. Profit/Loss                | {avg_gain:.2f}                        |
+| Avg. Profit/Loss %              | {((returns_stats['rtot'] * 100) /
+                                      trade_stats.total.closed):.2f}%|
+| Avg. Bars Held                  | N/A                                   |
+
+| Winners                         |               |
+|---------------------------------|---------------|
+| Total Profit                    | {trade_stats.won.pnl.total:.2f}         |
+| Avg. Profit                     | {trade_stats.won.pnl.average:.2f}     |
+| Avg. Profit %                   | N/A                                   |
+| Avg. Bars Held                  | N/A                                   |
+| Max. Consecutive Wins           | {trade_stats.streak.won.longest}      |
+| Largest Win                     | N/A                                   |
+| Bars in Largest Win             | N/A                                   |
+
+| Losers                          |               |
+|---------------------------------|---------------|
+| Total Loss                      | {trade_stats.lost.pnl.total:.2f}        |
+| Avg. Loss                       | {trade_stats.lost.pnl.average:.2f}    |
+| Avg. Loss %                     | N/A                                   |
+| Avg. Bars Held                  | N/A                                   |
+| Max. Consecutive Losses         | {trade_stats.streak.lost.longest}     |
+| Largest Loss                    | N/A                                   |
+| Bars in Largest Loss            | N/A                                   |
+
+| Additional Metrics              |               |
+|---------------------------------|---------------|
+| Max. Trade Drawdown             | N/A                                   |
+| Max. Trade % Drawdown           |                                       |
+| Max. System Drawdown            | {drawdown_stats.max.moneydown:.2f}     |
+| Max. System % Drawdown          | {drawdown_stats.max.drawdown:.2f}% |
+| Recovery Factor                 | N/A                                   |
+| CAR/MaxDD                       | N/A                                   |
+| RAR/MaxDD                       | N/A                                   |
+| Profit Factor                   | {profit_factor}                       |
+| Payoff Ratio                    | N/A                                   |
+| Standard Error                  | N/A                                   |
+| Risk-Reward Ratio               | N/A                                   |
+"""
+    return markdown_table
+
+
+def get_strategy_stats(strategy, flatten=False, opt=False):
+    # Extract statistics from analyzers
+    returns_stats = strategy.analyzers.returns.get_analysis()
+    trade_stats = strategy.analyzers.trade_stats.get_analysis()
+    drawdown_stats = strategy.analyzers.drawdown.get_analysis()
+    in_market_stats = strategy.analyzers.in_market.get_analysis()
+
+    if trade_stats.total.total == 0:
+        return None
+
+    # Calculate derived metrics
+    total_in_market_bars = in_market_stats.get("Total In-Market Bars", 0)
+    total_bars = in_market_stats.get("Total Bars", 1)
+    total_gains = in_market_stats.get("Total Gains", 1)
+    total_losses = in_market_stats.get("Total Losses", 1)
+    time_in_market = total_in_market_bars / total_bars if total_bars > 0 else 0
+    return_per_exposure = (
+        returns_stats["rnorm"] / time_in_market if time_in_market > 0 else 0
+    )
+    profit_factor = total_gains / total_losses if total_losses > 0 else None
+    avg_gain = (
+        in_market_stats.get("Total Percent Gain", 0) / trade_stats.total.closed
+        if trade_stats.total.closed > 0
+        else None
+    )
+
+    # Assemble data into a structured dictionary
+    stats_dict = {
+        "capital": {
+            "initial": strategy.broker.startingcash if not opt else None,
+            "ending": strategy.broker.getvalue() if not opt else None,
+            "net_profit": (
+                strategy.broker.getvalue() - strategy.broker.startingcash
+                if not opt
+                else None
+            ),
+            "net_profit_percent": returns_stats["rtot"] * 100,
+        },
+        "exposure": {
+            "percent": time_in_market * 100,
+            "net_risk_adjusted_return": (
+                return_per_exposure * 100 if return_per_exposure else 0.0
+            ),
+        },
+        "returns": {
+            "cagr": returns_stats["rnorm"] * 100,
+            "sharpe_ratio": (
+                strategy.analyzers.sharpe.get_analysis()["sharperatio"]
+                if strategy.analyzers.sharpe.get_analysis()["sharperatio"]
+                else 0.0
+            ),
+        },
+        "trades": {
+            "total": trade_stats.total.closed,
+            "avg_profit_loss": (avg_gain if avg_gain is not None else 0.0),
+            "avg_profit_loss_percent": (
+                (returns_stats["rtot"] * 100) / trade_stats.total.closed
+                if trade_stats.total.closed > 0
+                else 0.0
+            ),
+            "winners": {
+                "total_profit": trade_stats.won.pnl.total,
+                "avg_profit": trade_stats.won.pnl.average,
+                "max_consecutive": trade_stats.streak.won.longest,
+            },
+            "losers": {
+                "total_loss": trade_stats.lost.pnl.total,
+                "avg_loss": trade_stats.lost.pnl.average,
+                "max_consecutive": trade_stats.streak.lost.longest,
+            },
+        },
+        "drawdown": {
+            "max_money": drawdown_stats.max.moneydown,
+            "max_percent": drawdown_stats.max.drawdown,
+            "max_drawdown_duration": drawdown_stats.max.len,
+        },
+        "profit_factor": (profit_factor if profit_factor is not None else 0.0),
+    }
+
+    if flatten:
+        stats_dict = flatten_dict(stats_dict)
+        stats_dict = {k: v for k, v in stats_dict.items() if v is not None}
+
+    return stats_dict
+
+
+def flatten_dict(d, parent_key="", sep="."):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):  # If the value is a nested dictionary
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:  # If the value is not a dictionary
+            items.append((new_key, v))
+    return dict(items)
+
+
+def get_buy_and_hold(filename, initial_investment=100000, datetime=False):
+
+    # Load the data
+    data = pd.read_csv(filename)
+
+    if datetime:
+        data["Datetime"] = pd.to_datetime(data["Datetime"])
+        data["Date"] = data["Datetime"].dt.date
+    else:
+        data["Date"] = pd.to_datetime(data["Date"])
+
+    # Check if 'Adj Close' column exists
+    if "Adj Close" not in data.columns:
+        raise ValueError("The file must contain an 'Adj Close' column.")
+
+    # Calculate the buy and hold value
+    initial_price = data["Adj Close"].iloc[0]
+    data["BuyAndHoldValue"] = (
+        data["Adj Close"] / initial_price
+    ) * initial_investment
+
+    return data
