@@ -1,6 +1,6 @@
 # Quant_Fin_Analysis
 
-Quantitative financial analysis code.
+Quantitative financial analysis code. Many of the docstrings were assisted by Codeium.
 
 ## Repo Map
 
