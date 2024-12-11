@@ -38,7 +38,21 @@ def strategy_class(strategy):
 
 def vsrandom(args):
     """
-    Compare strategy results to a random entry and exit strategy
+    Compare the strategy against a random strategy. This function takes the
+    same arguments as backtest, but instead of running a single backtest, it
+    runs the strategy against a random strategy multiple times and plots a
+    comparison curve.
+
+    The function also saves a CSV of the results.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The arguments passed to the backtest function.
+
+    Returns
+    -------
+    None
     """
     params = (
         pd.read_csv(args.strategy_report + "/best_parameters.csv")
@@ -119,7 +133,24 @@ def vsrandom(args):
 
 def mc_randomized_entry(args):
     """
-    Randomize the entry of the strategy to see if the exit is robust
+    Perform a Monte Carlo simulation by applying a randomized entry condition
+    to a trading strategy and comparing it against the original strategy.
+
+    The function modifies the long entry condition of the given strategy to
+    use a random decision process. It then runs several iterations of the
+    strategy with this randomized entry to assess its robustness.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The arguments containing the configuration for the backtest, including
+        the strategy, data, and number of iterations.
+
+    Returns
+    -------
+    None
+    The results, including equity curves and strategy statistics, are saved as
+    plots and CSV files in the specified directory.
     """
     params = (
         pd.read_csv(args.strategy_report + "/best_parameters.csv")
@@ -210,7 +241,24 @@ def mc_randomized_entry(args):
 
 def mc_randomized_exit(args):
     """
-    Randomize the exit of the strategy to see if the entry is robust
+    Perform a Monte Carlo simulation by applying a randomized exit condition
+    to a trading strategy and comparing it against the original strategy.
+
+    The function modifies the exit condition of the given strategy to use a
+    random decision process. It then runs several iterations of the strategy
+    with this randomized exit to assess its robustness.
+
+    Parameters
+    ----------
+    args : argparse.Namespace
+        The arguments containing the configuration for the backtest, including
+        the strategy, data, and number of iterations.
+
+    Returns
+    -------
+    None
+    The results, including equity curves and strategy statistics, are saved as
+    plots and CSV files in the specified directory.
     """
     params = (
         pd.read_csv(args.strategy_report + "/best_parameters.csv")

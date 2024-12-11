@@ -24,6 +24,31 @@ from analyzers import InMarketAnalyzer, CashValueAnalyzer, SortinoRatio
 
 
 def opt_universe(data_path, strategy, optimization_args, args):
+    """
+    Run an optimization universe for a given strategy, data and optimization
+    parameters.
+
+    Parameters
+    ----------
+    data_path : str
+        The path to the CSV file of the data to be backtested.
+    strategy : bt.Strategy
+        The strategy to be optimized.
+    optimization_args : dict
+        The arguments to be optimized for the strategy.
+    args : argparse.Namespace
+        The command line arguments.
+
+    Returns
+    -------
+    list
+        A list of the results of the optimization runs.
+
+    Notes
+    -----
+    This function is designed to be used with the `multiprocessing` module to
+    run optimizations in parallel.
+    """
     data_df = pd.read_csv(data_path)
     data_df["Datetime"] = pd.to_datetime(
         data_df["Datetime"], utc=True
@@ -68,6 +93,30 @@ def opt_universe(data_path, strategy, optimization_args, args):
 def get_opt_universe_df(
     results, symbol, opt_step_sizes, save_folder="", save=True
 ):
+    """
+    Takes the results of a backtrader optimization run and returns a pandas
+    DataFrame with the results. If the `save` parameter is True, the DataFrame
+    is saved to a CSV file in the `save_folder` directory.
+
+    Parameters
+    ----------
+    results : list
+        The results of a backtrader optimization run.
+    symbol : str
+        The symbol of the security that was backtested.
+    opt_step_sizes : dict
+        A dictionary of the step sizes for the optimization parameters.
+    save_folder : str, default ""
+        The directory to which the results should be saved. If the directory
+        does not exist, it will be created.
+    save : bool, default True
+        Whether or not to save the results to a CSV file.
+
+    Returns
+    -------
+    pd.DataFrame
+        A DataFrame with the results of the optimization run.
+    """
     data_results = defaultdict(list)
     for strat in results:
         flattened_results = utils.get_strategy_stats(
@@ -111,6 +160,36 @@ def get_opt_universe_df(
 def get_best_parameters_df(
     best_params, opt_params, symbol, save_folder="", save=True
 ):
+    """
+    Takes in best parameters and optimization parameters, and writes them to a
+    pandas dataframe.
+    The dataframe is then saved to a csv file in the specified folder, or
+    appended to an existing csv file if it already exists.
+
+    Parameters
+    ----------
+    best_params : dict
+        A dictionary of the best parameters found, with parameter names as
+        keys.
+    opt_params : dict
+        A dictionary of the optimization parameters used, with parameter names
+        as keys.
+    symbol : str
+        The symbol of the instrument that was optimized.
+    save_folder : str
+        The folder where the csv file should be saved. If empty, the file is
+        not saved.
+    save : bool
+        If True, the dataframe is saved to a csv file. If False, the dataframe
+        is returned but not saved.
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas dataframe with the best parameters and symbol.
+        If the dataframe is saved, it is returned.
+        If the dataframe is not saved, it is returned.
+    """
     data_results = defaultdict(list)
     data_results["symbol"].append(symbol)
 
@@ -141,6 +220,37 @@ def get_best_parameters_df(
 
 
 def get_test_results_df(results, opt_step_sizes, save_folder="", save=True):
+    """
+    This function takes a dictionary of backtrader results and a dictionary
+    of optimization step sizes, and returns a pandas
+    DataFrame with the test results. The dataframe is saved
+    to a csv file if save is True. If the file already exists, the dataframe
+    is merged with the existing dataframe.
+
+    Parameters
+    ----------
+    results : dict
+        A dictionary of backtrader results. The keys are the symbols and the
+        values are a list of a backtrader Strategy object and the name of the
+        strategy.
+    opt_step_sizes : dict
+        A dictionary of optimization step sizes. The keys are the parameter
+        names and the values are the step sizes.
+    save_folder : str
+        The folder where the csv file should be saved. If empty, the file is
+        not saved.
+    save : bool
+        If True, the dataframe is saved to a csv file. If False, the dataframe
+        is returned but
+        not saved.
+
+    Returns
+    -------
+    pd.DataFrame
+        A pandas dataframe with the test results. If the dataframe is saved,
+        it is returned. If the dataframe is not saved, it is returned.
+    """
+
     data_results = defaultdict(list)
     for symbol in results:
         strat = results[symbol]
@@ -163,6 +273,26 @@ def get_test_results_df(results, opt_step_sizes, save_folder="", save=True):
 
 
 def backtest(data_path, strategy, parameters, args):
+    """
+    This function runs a backtest of a given strategy with a set of parameters
+    and given args.
+
+    Parameters
+    ----------
+    data_path : str
+        The path to the data file to be used for the backtest.
+    strategy : bt.Strategy
+        The strategy to be used for the backtest.
+    parameters : dict
+        A dictionary of parameters to be used for the strategy.
+    args : argparse.Namespace
+        The parsed command line arguments.
+
+    Returns
+    -------
+    bt.Cerebro
+        The backtest results in a bt.Cerebro object.
+    """
     cerebro = bt.Cerebro(cheat_on_open=args.cheat_on_open)
     data = utils.YahooFinanceCSVData(
         dataname=data_path, adjclose=True, round=False

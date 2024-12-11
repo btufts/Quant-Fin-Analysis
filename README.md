@@ -17,5 +17,8 @@ This folder includes a list of jupyter notebooks. Each notebook includes a link 
 ### Reports
 
 ### Tests
+Test files for various functions. Many functions rely heavily on backtrader and are therfore not tested by me because I couldn't possibly build test cases without using backtrader which would... well defeat the purpose of the test.
+
+Most of the tests were assisted by GPT-4o.
 
 ### Main Files

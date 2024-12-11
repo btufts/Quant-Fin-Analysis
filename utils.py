@@ -118,6 +118,26 @@ class YahooFinanceCSVData(feed.CSVDataBase):
 
 
 def get_neighbors(symbol_data, row, params, n):
+    """
+    Get the neighbors of a given row within a range of parameters.
+
+    Parameters
+    ----------
+    symbol_data : pd.DataFrame
+        The dataframe containing the data for the symbol.
+    row : pd.Series
+        The row for which to find the neighbors.
+    params : dict[str, int]
+        A dictionary mapping parameter names to the steps to take
+        in each parameter to consider a neighbor.
+    n : int, default=1
+        The number of steps to take in each parameter to consider a neighbor.
+
+    Returns
+    -------
+    neighbors : pd.DataFrame
+        A dataframe containing the neighbors of the given row.
+    """
     # Initialize the condition to True so we can
     # apply multiple conditions using & operator
     condition = True
@@ -138,29 +158,49 @@ def find_best_params(
     agg_func: Callable[[pd.Series], float] = pd.Series.mean,
 ) -> dict[str, tuple]:
     """
-    Finds the best n-neighborhood for a specific target parameters,
-      where n=1 is the best single point
+    Find the best parameters in the given metrics_df based on the target
+    column and the given parameters with their respective steps.
+
+    Parameters
+    ----------
+    metrics_df: pd.DataFrame
+        The DataFrame containing the metrics to be analyzed. It should have
+        columns for the parameters and a column for the target.
+
+    target: str
+        The name of the column to be used as the target.
+
+    params: dict[str, int]
+        A dictionary where the keys are the names of the columns that should
+        be used as parameters and the values are the steps
+        to be used when finding the neighbors.
+
+    n: int, optional
+        The number of neighbors to consider when finding the best parameters.
+        Defaults to 1.
+
+    agg_func: Callable[[pd.Series], float], optional
+        The aggregation function to be used when calculating the average
+        target. Defaults to pd.Series.mean.
+
+    Returns
+    -------
+    dict[str, tuple]
+        A dictionary where the keys are the names of the parameters and the
+        values are tuples containing the best value and the standard
+        deviation of the best values found.
     """
     best_avg_target = float("-inf")
     curr_best = None
 
     # Iterate through each row for the current symbol
     for _, row in metrics_df.iterrows():
-        # Get the neighboring points for the
-        # current row, considering n neighbors
-        # TODO: Make this work for other
-        # strategies (get strat params as params to this function)
-        # neighbors = symbol_data
-        # for param, step in params.items():
-        #   neighbors = neighbors[(symbol_data[param].between(row[param] -
-        # (step*n), row[param] + (step*n)))]
-
         neighbors = get_neighbors(metrics_df, row, params, n)
 
-        # Calculate the average CAGR of the current point and its neighbors
+        # Calculate the average target of the current point and its neighbors
         avg_target = agg_func(neighbors[target])
 
-        # Update the best triple if the current average CAGR is higher
+        # Update the best triple if the current average target is higher
         if avg_target > best_avg_target:
             best_avg_target = avg_target
             curr_best = {param: row[param] for param in params.keys()}
@@ -170,6 +210,28 @@ def find_best_params(
 
 def reorder_csv(file_path, datetime=False):
     # Read the CSV file
+    """
+    Reorders a CSV file with the expected column order.
+
+    Parameters
+    ----------
+    file_path : str
+        The path to the CSV file to be reordered.
+    datetime : bool, optional
+        If True, assumes the date column is named "Datetime" instead of "Date".
+        Defaults to False.
+
+    Raises
+    ------
+    ValueError
+        If any of the expected columns are missing from the CSV file.
+
+    Notes
+    -----
+    The expected column order is:
+    ["Date"/"Datetime", "Open", "High", "Low", "Close", "Adj Close", "Volume"]
+
+    """
     df = pd.read_csv(file_path)
 
     date_title = "Date"
@@ -202,16 +264,37 @@ def reorder_csv(file_path, datetime=False):
 
 def print_strategy_stats(strategy):
     # Extract statistics from analyzers
+    """
+    Prints a markdown table containing various statistics about the given
+    strategy.
+
+    The statistics include:
+    - Initial and ending capital
+    - Net profit and net profit percentage
+    - Exposure percentage
+    - Net risk adjusted return
+    - Annual return percentage
+    - Risk adjusted return percentage
+    - Transaction costs
+    - Various trade statistics (total number of trades, average profit/loss,
+    etc.)
+    - Various metrics about the strategy's performance (max trade drawdown,
+    max system drawdown, etc.)
+
+    Parameters
+    ----------
+    strategy : bt.Strategy
+        The strategy to generate statistics for.
+
+    Returns
+    -------
+    str
+        A markdown table containing the statistics.
+    """
     returns_stats = strategy.analyzers.returns.get_analysis()
     trade_stats = strategy.analyzers.trade_stats.get_analysis()
     drawdown_stats = strategy.analyzers.drawdown.get_analysis()
     in_market_stats = strategy.analyzers.in_market.get_analysis()
-    # sharpe_ratio = strategy.analyzers.sharpe.get_analysis().get(
-    #     "sharperatio", "N/A"
-    # )
-    # sortino_ratio = strategy.analyzers.sortino.get_analysis().get(
-    #     "Sortino Ratio", "N/A"
-    # )
 
     # Calculate derived metrics
     total_in_market_bars = in_market_stats.get("Total In-Market Bars", 0)
@@ -291,6 +374,20 @@ def print_strategy_stats(strategy):
 
 def get_strategy_stats(strategy, flatten=False, opt=False):
     # Extract statistics from analyzers
+    """
+    Extracts and calculates statistics from a Backtrader strategy.
+
+    Args:
+        strategy (backtrader.Strategy): The strategy to extract statistics
+        from.
+        flatten (bool, optional): If True, flattens the returned dictionary.
+        Defaults to False.
+        opt (bool, optional): If True, omits certain fields from the returned
+        dictionary, such as the initial and ending capital. Defaults to False.
+
+    Returns:
+        dict: A dictionary containing the extracted statistics.
+    """
     returns_stats = strategy.analyzers.returns.get_analysis()
     trade_stats = strategy.analyzers.trade_stats.get_analysis()
     drawdown_stats = strategy.analyzers.drawdown.get_analysis()
@@ -376,6 +473,19 @@ def get_strategy_stats(strategy, flatten=False, opt=False):
 
 
 def flatten_dict(d, parent_key="", sep="."):
+    """
+    Flattens a nested dictionary into a one-level dictionary.
+
+    Args:
+        d (dict): The dictionary to be flattened.
+        parent_key (str, optional): The parent key to be prepended to the new
+        keys. Defaults to "".
+        sep (str, optional): The separator to be used when joining the parent
+        key and the current key. Defaults to ".".
+
+    Returns:
+        dict: The flattened dictionary.
+    """
     items = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -387,8 +497,22 @@ def flatten_dict(d, parent_key="", sep="."):
 
 
 def get_buy_and_hold(filename, initial_investment=100000, datetime=False):
+    """
+    Reads a CSV file containing a stock's historical data and calculates the
+    buy and hold value.
 
-    # Load the data
+    Args:
+        filename (str): The path to the CSV file.
+        initial_investment (int, optional): The initial amount of money to
+        invest. Defaults to 100000.
+        datetime (bool, optional): If True, the 'Date' column is treated as a
+        datetime object and the 'Datetime' column is created. Defaults to
+        False.
+
+    Returns:
+        pandas.DataFrame: A DataFrame containing the original data and a new
+        'BuyAndHoldValue' column.
+    """
     data = pd.read_csv(filename)
 
     if datetime:
