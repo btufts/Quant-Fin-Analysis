@@ -1,6 +1,6 @@
 # Quant_Fin_Analysis
 
-Quantitative financial analysis code. Many of the docstrings were assisted by Codeium.
+Quantitative financial analysis code. Analysis of 4 strategies optimized for 10 currency pairs and robustness tested using 3 different methods. Many of the docstrings were assisted by Codeium.
 
 ## Repo Map
 
@@ -17,7 +17,7 @@ This folder includes a list of jupyter notebooks. Each notebook includes a link 
 ### Reports
 
 ### Tests
-Test files for various functions. Many functions rely heavily on backtrader and are therfore not tested by me because I couldn't possibly build test cases without using backtrader which would... well defeat the purpose of the test.
+Test files for various functions. Many functions rely heavily on backtrader and are therefore not tested by me because I couldn't possibly build test cases without using backtrader which would... well defeat the purpose of the test.
 
 Most of the tests were assisted by GPT-4o.
 
