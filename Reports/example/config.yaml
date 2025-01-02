@@ -18,12 +18,16 @@ experiments:
       max_lowerband: -60
       lowerband_step: 10
   
-  # - name: example_robustness # Required: Output Folder Name
-  #   type: robustness # Required: optimize and robustness are the two types of experiments
-  #   logging: false # Default: TODO
-  #   data: Data/forex_data/usdeur.csv # Required
-  #   cheat_on_open: false
-  #   symbol: usdeur # Required
-  #   strategy: CCI # Required
-  #   opt_parameters_file: example_optimize/best_parameters.json # Required
-  #   tests: [mcrandomentry, mcrandomexit, vsrandom]
+  - name: example_robustness # Required: Output Folder Name
+    type: robustness # Required: optimize and robustness are the two types of experiments
+    logging: false # Default: TODO
+    data: Data/forex_data/usdeur.csv # Required
+    cash: 100000 # Default
+    commission: 0.0 # Default
+    cheat_on_open: false
+    symbol: usdeur # Required
+    strategy: CCI # Required
+    optimize_result: example_optimize # Required: Path to optimize experiment results
+    tests: [mcrandomentry, mcrandomexit, vsrandom]
+    vsrandom_itrs: 100 # Default
+    mcrandom_itrs: 100 # Default

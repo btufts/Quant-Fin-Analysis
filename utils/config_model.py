@@ -13,6 +13,8 @@ class ExperimentBase(BaseModel):
     symbol: str
     strategy: str
     cheat_on_open: bool = False
+    cash: float = 100_000
+    commission: float = 0.0
 
 
 #
@@ -36,8 +38,10 @@ class OptimizeExperiment(ExperimentBase):
 class RobustnessExperiment(ExperimentBase):
     type: Literal["robustness"]  # Must match exactly "robustness"
 
-    opt_parameters_file: str
+    optimize_result: str
     tests: List[str]
+    vsrandom_itrs: int = 100
+    mcrandom_itrs: int = 100
 
 
 #
