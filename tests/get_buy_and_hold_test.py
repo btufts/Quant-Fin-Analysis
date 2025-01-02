@@ -7,7 +7,7 @@ from math import isclose
 new_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 if new_path not in sys.path:  # Avoid adding duplicates
     sys.path.append(new_path)
-from utils import get_buy_and_hold
+from utils.utils import get_buy_and_hold
 
 
 @pytest.fixture

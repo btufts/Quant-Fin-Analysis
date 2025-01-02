@@ -6,7 +6,7 @@ import numpy as np
 new_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 if new_path not in sys.path:  # Avoid adding duplicates
     sys.path.append(new_path)
-from utils import find_best_params
+from utils.utils import find_best_params
 
 
 def test_find_best_params_basic():

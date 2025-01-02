@@ -12,7 +12,7 @@ import backtrader.analyzers as btanalyzers
 import matplotlib.pyplot as plt
 
 # Local Imports
-import utils
+import utils.utils as utils
 from strategies import (
     WilliamsRStrategy,
     RandomStrategy,
@@ -23,48 +23,43 @@ from strategies import (
 from analyzers import InMarketAnalyzer, CashValueAnalyzer, SortinoRatio
 
 
-def opt_universe(data_path, strategy, optimization_args, args):
-    """
-    Run an optimization universe for a given strategy, data and optimization
-    parameters.
+def get_train_test_split(df, test_size=0.2):
+    datetime_column = "Datetime"
+    df[datetime_column] = pd.to_datetime(df[datetime_column])
 
-    Parameters
-    ----------
-    data_path : str
-        The path to the CSV file of the data to be backtested.
-    strategy : bt.Strategy
-        The strategy to be optimized.
-    optimization_args : dict
-        The arguments to be optimized for the strategy.
-    args : argparse.Namespace
-        The command line arguments.
+    # Sort the dataframe by the datetime column
+    df = df.sort_values(by=datetime_column)
 
-    Returns
-    -------
-    list
-        A list of the results of the optimization runs.
+    # Calculate the split index for the test size
+    split_index = int(len(df) * (1 - test_size))
 
-    Notes
-    -----
-    This function is designed to be used with the `multiprocessing` module to
-    run optimizations in parallel.
-    """
-    data_df = pd.read_csv(data_path)
-    data_df["Datetime"] = pd.to_datetime(
-        data_df["Datetime"], utc=True
-    ).dt.tz_convert(None)
-    start_date = data_df["Datetime"].min()
-    end_date = data_df["Datetime"].max()
+    # Split the dataframe
+    train_df = df.iloc[:split_index]
+    test_df = df.iloc[split_index:]
+
+    return train_df, test_df
+
+
+def opt_universe(
+    df: pd.DataFrame,
+    strategy: bt.Strategy,
+    optimization_args: dict[str, int],
+    args,
+):
+
+    start_date = df["Datetime"].min()
+    end_date = df["Datetime"].max()
 
     cerebro = bt.Cerebro(cheat_on_open=args.cheat_on_open)
-    data = utils.YahooFinanceCSVData(
-        dataname=data_path,
-        fromdate=start_date,
-        todate=end_date,
-        adjclose=True,
-        round=False,
+
+    datafeed = utils.PandasDataFeed(
+        dataframe=df,
+        dtformat="%Y-%m-%d %H:%M:%S",
+        use_adjusted_close=True,
+        timeframe=bt.TimeFrame.Minutes,
+        compression=60,
     )
-    cerebro.adddata(data)
+    cerebro.adddata(datafeed)
 
     # Add the WilliamsR strategy
     cerebro.optstrategy(strategy, **optimization_args)
@@ -272,32 +267,20 @@ def get_test_results_df(results, opt_step_sizes, save_folder="", save=True):
     return df
 
 
-def backtest(data_path, strategy, parameters, args):
-    """
-    This function runs a backtest of a given strategy with a set of parameters
-    and given args.
-
-    Parameters
-    ----------
-    data_path : str
-        The path to the data file to be used for the backtest.
-    strategy : bt.Strategy
-        The strategy to be used for the backtest.
-    parameters : dict
-        A dictionary of parameters to be used for the strategy.
-    args : argparse.Namespace
-        The parsed command line arguments.
-
-    Returns
-    -------
-    bt.Cerebro
-        The backtest results in a bt.Cerebro object.
-    """
+def backtest(
+    df: pd.DataFrame, strategy: bt.Strategy, parameters: dict[str, int], args
+):
     cerebro = bt.Cerebro(cheat_on_open=args.cheat_on_open)
-    data = utils.YahooFinanceCSVData(
-        dataname=data_path, adjclose=True, round=False
+
+    datafeed = utils.PandasDataFeed(
+        dataframe=df,
+        dtformat="%Y-%m-%d %H:%M:%S",
+        use_adjusted_close=True,
+        timeframe=bt.TimeFrame.Minutes,
+        compression=60,
     )
-    cerebro.adddata(data)
+
+    cerebro.adddata(datafeed)
 
     # Add the WilliamsR strategy
     cerebro.addstrategy(strategy, **parameters)
@@ -327,9 +310,9 @@ def backtest(data_path, strategy, parameters, args):
     return results
 
 
-def main(args):
-    output_folder = f"Reports/{args.output_folder}"
-    os.makedirs(f"Reports/{args.output_folder}", exist_ok=True)
+def main(args, root_folder):
+    output_folder = f"{root_folder}/{args.name}"
+    os.makedirs(f"{root_folder}/{args.name}", exist_ok=True)
 
     strategy = None
     if args.strategy == "Random":
@@ -348,12 +331,14 @@ def main(args):
     # This will build an optimization
     # universe for each of the symbols in the training data
     optimization_args, opt_step_sizes = strategy.get_optimization_args(
-        **args.strat_args
+        **args.parameters
     )
 
-    opt_run = opt_universe(
-        f"{args.train_data}", strategy, optimization_args, args
-    )
+    data_df = pd.read_csv(args.data)
+
+    train_data, test_data = get_train_test_split(data_df)
+
+    opt_run = opt_universe(train_data, strategy, optimization_args, args)
 
     opt_uni_df = get_opt_universe_df(
         opt_run, args.symbol, opt_step_sizes, save_folder=output_folder
@@ -387,7 +372,7 @@ def main(args):
         best_params_df["symbol"], desc="Backtesting Best Parameters"
     ):
         test_results[symbol] = backtest(
-            f"{args.test_data}/{symbol}_test.csv",
+            test_data,
             strategy,
             best_params_dict[symbol],
             args,
