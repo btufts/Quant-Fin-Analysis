@@ -1,0 +1,29 @@
+experiments:
+  - name: example_optimize # Required: Output Folder Name
+    type: optimize # Required: optimize and robustness are the two types of experiments
+    logging: false # Default: TODO
+    data: Data/forex_data/usdeur.csv # Required
+    symbol: usdeur # Required
+    cash: 100000 # Default
+    commission: 0.0 # Default
+    cheat_on_open: false # Default
+    opt_param: cagr # Default
+    opt_neighbors: 5 # Default
+    strategy: CCI # Required
+    parameters:
+      min_period: 10
+      max_period: 12
+      period_step: 1
+      min_lowerband: -80
+      max_lowerband: -60
+      lowerband_step: 10
+  
+  # - name: example_robustness # Required: Output Folder Name
+  #   type: robustness # Required: optimize and robustness are the two types of experiments
+  #   logging: false # Default: TODO
+  #   data: Data/forex_data/usdeur.csv # Required
+  #   cheat_on_open: false
+  #   symbol: usdeur # Required
+  #   strategy: CCI # Required
+  #   opt_parameters_file: example_optimize/best_parameters.json # Required
+  #   tests: [mcrandomentry, mcrandomexit, vsrandom]

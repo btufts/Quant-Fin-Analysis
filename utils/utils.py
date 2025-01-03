@@ -15,7 +15,8 @@ from datetime import datetime
 import io
 import itertools
 
-from backtrader import feed
+import backtrader as bt
+from backtrader import feed, feeds
 from backtrader.utils import date2num
 
 
@@ -113,6 +114,106 @@ class YahooFinanceCSVData(feed.CSVDataBase):
         self.lines.close[0] = c
         self.lines.volume[0] = v
         self.lines.adjclose[0] = adjustedclose
+
+        return True
+
+
+class PandasDataFeed(feeds.DataBase):
+    """
+    A custom Backtrader Data Feed that extends from DataBase
+    and takes a Pandas DataFrame (e.g., from a Yahoo Finance CSV).
+    """
+
+    params = (
+        ("datetime", "Datetime"),  # Column name for datetime
+        (
+            "dtformat",
+            "%Y-%m-%d",
+        ),  # Format of the datetime string in the dataframe
+        ("open", "Open"),  # Column name for open
+        ("high", "High"),  # Column name for high
+        ("low", "Low"),  # Column name for low
+        ("close", "Close"),  # Column name for close
+        ("volume", "Volume"),  # Column name for volume
+        ("openinterest", None),  # Not typically provided in Yahoo data
+        ("adjclose", "Adj Close"),  # Column name for adjusted close
+        ("use_adjusted_close", False),  # Whether to scale data by Adj Close
+        ("timeframe", bt.TimeFrame.Days),
+        ("compression", 1),
+    )
+
+    def __init__(self, dataframe, **kwargs):
+        """
+        Args:
+            dataframe (pd.DataFrame): The price data already read from a CSV.
+            kwargs: Any additional params you want to override from self.params.
+        """
+        super().__init__()
+
+        # Update the params (if kwargs has matching keys)
+        for k, v in kwargs.items():
+            setattr(self.params, k, v)
+
+        # Store the DataFrame and reset the index
+        self.dataframe = dataframe.reset_index(drop=True)
+
+        # Current position in the DataFrame
+        self._idx = -1
+
+        # Last valid index in the DataFrame
+        self._last_idx = len(self.dataframe) - 1
+
+    def _load(self):
+        """
+        This method is called by Backtrader to load the next bar (row).
+        Return True if you successfully loaded a bar, otherwise False.
+        """
+        self._idx += 1
+
+        if self._idx > self._last_idx:
+            return False  # No more data to load
+
+        row = self.dataframe.iloc[self._idx]
+
+        # Convert the DateTime column to a Backtrader-compatible numeric format
+        dt_value = row[self.p.datetime]
+        if isinstance(dt_value, str):
+            dt_value = datetime.strptime(dt_value, self.p.dtformat)
+        self.lines.datetime[0] = bt.date2num(dt_value)
+
+        # Determine if we should use the Adjusted Close ratio
+        if self.p.use_adjusted_close:
+            # Ensure we have non-zero close to avoid division error
+            raw_close = float(row[self.p.close])
+            adj_close = (
+                float(row[self.p.adjclose])
+                if self.p.adjclose in row
+                else raw_close
+            )
+
+            if raw_close != 0.0:
+                ratio = adj_close / raw_close
+            else:
+                ratio = 1.0
+
+            self.lines.open[0] = float(row[self.p.open]) * ratio
+            self.lines.high[0] = float(row[self.p.high]) * ratio
+            self.lines.low[0] = float(row[self.p.low]) * ratio
+            self.lines.close[0] = float(row[self.p.close]) * ratio
+        else:
+            # Use standard prices
+            self.lines.open[0] = float(row[self.p.open])
+            self.lines.high[0] = float(row[self.p.high])
+            self.lines.low[0] = float(row[self.p.low])
+            self.lines.close[0] = float(row[self.p.close])
+
+        # Volume can be scaled as well if desired, but typically is not.
+        self.lines.volume[0] = (
+            float(row[self.p.volume]) if self.p.volume in row else 0.0
+        )
+
+        # We typically set open interest to 0 for stock data
+        self.lines.openinterest[0] = 0.0
 
         return True
 

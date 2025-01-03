@@ -4,7 +4,7 @@ import os
 new_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 if new_path not in sys.path:  # Avoid adding duplicates
     sys.path.append(new_path)
-from utils import flatten_dict
+from utils.utils import flatten_dict
 
 
 def test_flatten_dict_simple():

@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # Local Imports
-from strategy_report import backtest
+from optimize_strategy import backtest
 from strategies import (
     RandomStrategy,
     WilliamsRStrategy,
@@ -18,7 +18,7 @@ from strategies import (
     StochasticStrategy,
     TurnaroundTuesday,
 )
-import utils
+import utils.utils as utils
 
 
 def strategy_class(strategy):

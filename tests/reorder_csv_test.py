@@ -6,7 +6,7 @@ import sys
 new_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 if new_path not in sys.path:  # Avoid adding duplicates
     sys.path.append(new_path)
-from utils import reorder_csv
+from utils.utils import reorder_csv
 
 
 @pytest.fixture
