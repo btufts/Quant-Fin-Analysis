@@ -65,9 +65,7 @@ def vsrandom(args, output_folder):
     symbol = args.symbol
     random_results = []
     df = pd.read_csv(f"{args.data}")
-    df = pd.read_csv(f"{args.data}")
     for _ in tqdm(range(args.vsrandom_itrs), desc="Running vsrandom test"):
-        random_results.append(backtest(df, RandomStrategy, {}, args))
         random_results.append(backtest(df, RandomStrategy, {}, args))
 
     plt.figure(figsize=(10, 6), dpi=100)
@@ -125,10 +123,7 @@ def vsrandom(args, output_folder):
     plt.tight_layout()
     os.makedirs(f"{output_folder}/vsrandom/", exist_ok=True)
     plt.savefig(f"{output_folder}/vsrandom/{symbol}_vsrandom_curve.png")
-    os.makedirs(f"{output_folder}/vsrandom/", exist_ok=True)
-    plt.savefig(f"{output_folder}/vsrandom/{symbol}_vsrandom_curve.png")
     pd.DataFrame(data_results).to_csv(
-        f"{output_folder}/vsrandom/{symbol}_results.csv",
         f"{output_folder}/vsrandom/{symbol}_results.csv",
         index=False,
     )
@@ -175,12 +170,9 @@ def mc_randomized_entry(args, output_folder):
     symbol = args.symbol
     df = pd.read_csv(f"{args.data}")
     strategy_results = backtest(df, strategy, params[symbol], args)
-    df = pd.read_csv(f"{args.data}")
-    strategy_results = backtest(df, strategy, params[symbol], args)
 
     strategy.long_condition = randomized_entry
     for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
-        random_results.append(backtest(df, strategy, params[symbol], args))
         random_results.append(backtest(df, strategy, params[symbol], args))
 
     data_results = defaultdict(list)
@@ -236,16 +228,10 @@ def mc_randomized_entry(args, output_folder):
         f"{output_folder}/mcrandomentry/",
         exist_ok=True,
     )
-    os.makedirs(
-        f"{output_folder}/mcrandomentry/",
-        exist_ok=True,
-    )
     plt.savefig(
-        f"{output_folder}/mcrandomentry" + f"/{symbol}_mcrandomentry_curve.png"
         f"{output_folder}/mcrandomentry" + f"/{symbol}_mcrandomentry_curve.png"
     )
     pd.DataFrame(data_results).to_csv(
-        f"{output_folder}/mcrandomentry/{symbol}_results.csv",
         f"{output_folder}/mcrandomentry/{symbol}_results.csv",
         index=False,
     )
@@ -293,12 +279,9 @@ def mc_randomized_exit(args, output_folder):
     symbol = args.symbol
     df = pd.read_csv(f"{args.data}")
     strategy_results = backtest(df, strategy, params[symbol], args)
-    df = pd.read_csv(f"{args.data}")
-    strategy_results = backtest(df, strategy, params[symbol], args)
 
     strategy.long_condition = randomized_exit
     for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
-        random_results.append(backtest(df, strategy, params[symbol], args))
         random_results.append(backtest(df, strategy, params[symbol], args))
 
     data_results = defaultdict(list)
@@ -356,16 +339,10 @@ def mc_randomized_exit(args, output_folder):
         f"{output_folder}/mcrandomexit/",
         exist_ok=True,
     )
-    os.makedirs(
-        f"{output_folder}/mcrandomexit/",
-        exist_ok=True,
-    )
     plt.savefig(
-        f"{output_folder}/mcrandomexit/{symbol}_mcrandomexit_curve.png"
         f"{output_folder}/mcrandomexit/{symbol}_mcrandomexit_curve.png"
     )
     pd.DataFrame(data_results).to_csv(
-        f"{output_folder}/mcrandomexit/{symbol}_results.csv",
         f"{output_folder}/mcrandomexit/{symbol}_results.csv",
         index=False,
     )
@@ -377,10 +354,7 @@ def main(args, root_folder):
     for test in args.tests:
         if test == "vsrandom":
             vsrandom(args, output_folder)
-            vsrandom(args, output_folder)
         elif test == "mcrandomentry":
             mc_randomized_entry(args, output_folder)
-            mc_randomized_entry(args, output_folder)
         elif test == "mcrandomexit":
-            mc_randomized_exit(args, output_folder)
             mc_randomized_exit(args, output_folder)

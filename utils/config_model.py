@@ -24,8 +24,6 @@ class ExperimentBase(BaseModel):
 class OptimizeExperiment(ExperimentBase):
     type: Literal["optimize"]  # Must match exactly "optimize"
 
-    cash: float = 100_000
-    commission: float = 0.0
     opt_param: str = "cagr"
     opt_neighbors: int = 5
     # Accept any parameters as a dict
@@ -39,10 +37,7 @@ class RobustnessExperiment(ExperimentBase):
     type: Literal["robustness"]  # Must match exactly "robustness"
 
     optimize_result: str
-    optimize_result: str
     tests: List[str]
-    vsrandom_itrs: int = 100
-    mcrandom_itrs: int = 100
     vsrandom_itrs: int = 100
     mcrandom_itrs: int = 100
 
