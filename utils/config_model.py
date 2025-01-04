@@ -39,7 +39,10 @@ class RobustnessExperiment(ExperimentBase):
     type: Literal["robustness"]  # Must match exactly "robustness"
 
     optimize_result: str
+    optimize_result: str
     tests: List[str]
+    vsrandom_itrs: int = 100
+    mcrandom_itrs: int = 100
     vsrandom_itrs: int = 100
     mcrandom_itrs: int = 100
 
