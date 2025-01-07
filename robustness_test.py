@@ -11,29 +11,19 @@ import pandas as pd
 
 # Local Imports
 from optimize_strategy import backtest
-from strategies import (
-    RandomStrategy,
-    WilliamsRStrategy,
-    CCIStrategy,
-    StochasticStrategy,
-    TurnaroundTuesday,
-)
+import Strategies
+from Strategies import RandomStrategy
 import utils.utils as utils
 
 
-def strategy_class(strategy):
-    if strategy == "WilliamsR":
-        return WilliamsRStrategy
-    elif strategy == "Random":
-        return RandomStrategy
-    elif strategy == "CCI":
-        return CCIStrategy
-    elif strategy == "Stochastic":
-        return StochasticStrategy
-    elif strategy == "Turnaround":
-        return TurnaroundTuesday
-    else:
-        raise ValueError(f"Unknown strategy: {strategy}")
+def strategy_class(strategy_name):
+    try:
+        Strategy = getattr(Strategies, strategy_name)
+    except AttributeError:
+        raise AttributeError(
+            f"Strategy {strategy_name} not found. See README for more details."
+        )
+    return Strategy
 
 
 def vsrandom(args, output_folder):
@@ -164,20 +154,16 @@ def mc_randomized_entry(args, output_folder):
         else:
             return False
 
+    plt.figure(figsize=(10, 6), dpi=100)
+    plt.axhline(y=100000, color="black", linestyle="--", linewidth=2)
+
     # Get original results
+    data_results = defaultdict(list)
     strategy_results = None
     random_results = []
     symbol = args.symbol
     df = pd.read_csv(f"{args.data}")
     strategy_results = backtest(df, strategy, params[symbol], args)
-
-    strategy.long_condition = randomized_entry
-    for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
-        random_results.append(backtest(df, strategy, params[symbol], args))
-
-    data_results = defaultdict(list)
-    plt.figure(figsize=(10, 6), dpi=100)
-    plt.axhline(y=100000, color="black", linestyle="--", linewidth=2)
 
     plt.plot(
         strategy_results[0].datetimes,
@@ -186,6 +172,7 @@ def mc_randomized_entry(args, output_folder):
         alpha=1,
         zorder=3,
     )
+
     flattened_results = utils.get_strategy_stats(
         strategy_results[0], flatten=True, opt=True
     )
@@ -196,6 +183,12 @@ def mc_randomized_entry(args, output_folder):
         data_results[key].append(value)
     for param in params[symbol]:
         data_results[param].append(getattr(strategy_results[0].params, param))
+
+    original_long_condition = strategy.long_condition
+    strategy.long_condition = randomized_entry
+    for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
+        random_results.append(backtest(df, strategy, params[symbol], args))
+    strategy.long_condition = original_long_condition
 
     for i, strat in enumerate(random_results):
         flattened_results = utils.get_strategy_stats(
@@ -272,21 +265,16 @@ def mc_randomized_exit(args, output_folder):
         else:
             return False
 
+    plt.figure(figsize=(10, 6), dpi=100)
+    plt.axhline(y=args.cash, color="black", linestyle="--", linewidth=2)
+
     # Get original results
-    # Get original results
+    data_results = defaultdict(list)
     strategy_results = None
     random_results = []
     symbol = args.symbol
     df = pd.read_csv(f"{args.data}")
     strategy_results = backtest(df, strategy, params[symbol], args)
-
-    strategy.long_condition = randomized_exit
-    for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
-        random_results.append(backtest(df, strategy, params[symbol], args))
-
-    data_results = defaultdict(list)
-    plt.figure(figsize=(10, 6), dpi=100)
-    plt.axhline(y=100000, color="black", linestyle="--", linewidth=2)
 
     plt.plot(
         strategy_results[0].datetimes,
@@ -306,6 +294,13 @@ def mc_randomized_exit(args, output_folder):
         data_results[key].append(value)
     for param in params[symbol]:
         data_results[param].append(getattr(strategy_results[0].params, param))
+
+    # Get randomized results
+    original_close_condition = strategy.close_condition
+    strategy.close_condition = randomized_exit
+    for _ in tqdm(range(args.mcrandom_itrs), desc="Running mcrandom test"):
+        random_results.append(backtest(df, strategy, params[symbol], args))
+    strategy.close_condition = original_close_condition
 
     for i, strat in enumerate(random_results):
         flattened_results = utils.get_strategy_stats(

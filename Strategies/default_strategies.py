@@ -21,7 +21,7 @@ class StrategyBase(bt.Strategy):
         self.coo_close_indicator = False
 
     @staticmethod
-    def get_optimization_args():
+    def get_optimization_args() -> tuple[dict[str, list], dict[str, int]]:
         """
         This function will take key word parameters and
         return lists for optimization
