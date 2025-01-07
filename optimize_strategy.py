@@ -13,13 +13,7 @@ import matplotlib.pyplot as plt
 
 # Local Imports
 import utils.utils as utils
-from strategies import (
-    WilliamsRStrategy,
-    RandomStrategy,
-    CCIStrategy,
-    StochasticStrategy,
-    TurnaroundTuesday,
-)
+import Strategies
 from analyzers import InMarketAnalyzer, CashValueAnalyzer, SortinoRatio
 
 
@@ -314,32 +308,24 @@ def main(args, root_folder):
     output_folder = f"{root_folder}/{args.name}"
     os.makedirs(f"{root_folder}/{args.name}", exist_ok=True)
 
-    strategy = None
-    if args.strategy == "Random":
-        strategy = RandomStrategy
-    elif args.strategy == "WilliamsR":
-        strategy = WilliamsRStrategy
-    elif args.strategy == "CCI":
-        strategy = CCIStrategy
-    elif args.strategy == "Stochastic":
-        strategy = StochasticStrategy
-    elif args.strategy == "Turnaround":
-        strategy = TurnaroundTuesday
-    else:
-        raise ValueError(f"Strategy {args.strategy} not found")
+    try:
+        strategy = getattr(Strategies, args.strategy)
+    except AttributeError:
+        raise AttributeError(
+            f"Strategy {args.strategy} not found. See README for more details."
+        )
 
-    # This will build an optimization
-    # universe for each of the symbols in the training data
+    # Get arguments for optimization from the config
     optimization_args, opt_step_sizes = strategy.get_optimization_args(
         **args.parameters
     )
 
+    # Get train and test data
     data_df = pd.read_csv(args.data)
-
     train_data, test_data = get_train_test_split(data_df)
 
+    # Optimize the strategy
     opt_run = opt_universe(train_data, strategy, optimization_args, args)
-
     opt_uni_df = get_opt_universe_df(
         opt_run, args.symbol, opt_step_sizes, save_folder=output_folder
     )
@@ -372,7 +358,7 @@ def main(args, root_folder):
         best_params_df["symbol"], desc="Backtesting Best Parameters"
     ):
         test_results[symbol] = backtest(
-            test_data,
+            data_df,
             strategy,
             best_params_dict[symbol],
             args,
@@ -388,7 +374,24 @@ def main(args, root_folder):
     for symbol in test_results.keys():
         equity_curve = test_results[symbol][0].equity_curve
         datetimes = test_results[symbol][0].datetimes
-        plt.plot(datetimes, equity_curve, label=f"{symbol}")
+
+        cutoff_datetime = pd.to_datetime(test_data.iloc[0].Datetime)
+        mask = [d <= cutoff_datetime for d in datetimes]
+
+        plt.plot(
+            [d for d, m in zip(datetimes, mask) if m],
+            [v for v, m in zip(equity_curve, mask) if m],
+            color="blue",
+            label="Train Data",
+        )
+
+        # Plot the segment after the cutoff (red line)
+        plt.plot(
+            [d for d, m in zip(datetimes, mask) if not m],
+            [v for v, m in zip(equity_curve, mask) if not m],
+            color="red",
+            label="Test Data",
+        )
 
     # Set the y-ticks and labels
     plt.title(
