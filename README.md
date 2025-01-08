@@ -4,7 +4,9 @@ Quantitative financial analysis code. Analysis of 4 strategies optimized for 10 
 
 ## Setup
 
-TODO
+Developed with python version 3.12.2.
+
+    pip install -r requirements.txt
 
 ## Strategies
 
