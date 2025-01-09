@@ -175,6 +175,9 @@ def parse_args():
         help="The interval for fetching data. Default is 1d.",
     )
 
+    # TODO: Add support for keeping timezone when fetching data
+    # Backtrader does not support timezone so this data will not be
+    # compatible with backtrader
     parser.add_argument(
         "--ignore_tz",
         action="store_true",
