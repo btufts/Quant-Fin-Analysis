@@ -9,7 +9,7 @@ experiments:
     cheat_on_open: false # Default
     opt_param: cagr # Default
     opt_neighbors: 5 # Default
-    strategy: CCIStrategy # Required
+    strategy: CCIStrategy # Required: Name of strategy class
     parameters:
       min_period: 10
       max_period: 12
@@ -26,7 +26,7 @@ experiments:
     commission: 0.0 # Default
     cheat_on_open: false
     symbol: usdeur # Required
-    strategy: CCIStrategy # Required
+    strategy: CCIStrategy # Required: Name of strategy class
     optimize_result: example_optimize # Required: Path to optimize experiment results
     tests: [mcrandomentry, mcrandomexit, vsrandom]
     vsrandom_itrs: 100 # Default
